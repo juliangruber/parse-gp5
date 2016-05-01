@@ -28,6 +28,12 @@ module.exports = buf => {
     return num;
   };
 
+  const readByte = () => {
+    const num = buf.readInt8();
+    buf = buf.slice(1);
+    return num;
+  };
+
   const readInt = () => {
     const num = buf.readInt32LE();
     buf = buf.slice(4); 
@@ -101,6 +107,37 @@ module.exports = buf => {
 
   const tempoValue = readInt();
 
+  if (versionIndex > 0) skip(1);
+
+  let keySignature = readByte();
+  if (keySignature < 0) keySignature = 7 - keySignature;
+  skip(3);
+
+  // octave
+  readByte();
+
+  const channels = [];
+  for (let i = 0; i < 64; i++) {
+    let channel = {};
+    channel.program = readInt();
+    channel.volume = readByte();
+    channel.balance = readByte();
+    channel.chorus = readByte();
+    channel.reverb = readByte();
+    channel.phaser = readByte();
+    channel.tremolo = readByte();
+    channel.bank = i == 9
+      ? 'default percussion bank'
+      : 'default bank'
+    if (channel.program < 0) channel.program = 0;
+    skip(2);
+    channels.push(channel);
+  };
+  skip(42);
+
+  const measures = readInt();
+  const tracks = readInt();
+
   return {
     version: { major, minor },
     title,
@@ -114,7 +151,11 @@ module.exports = buf => {
     instructions,
     comments,
     lyrics: { track: lyricTrack, from: lyricFrom, text: lyricText },
-    tempoValue
+    tempoValue,
+    keySignature,
+    channels,
+    measures,
+    tracks
   };
 };
 
