@@ -10,7 +10,7 @@ module.exports = buf => {
   let versionIndex;
 
   const readVersion = () => {
-    /*if (version === null)*/ version = readStringByte(30);
+    version = readStringByte(30);
   };
 
   const readColor = () => {
@@ -604,7 +604,18 @@ module.exports = buf => {
           break;
       }
     }
-    return duration;
+    return getTime(duration);
+  };
+
+  const getTime = duration => {
+    const QUARTER_TIME = 960;
+    let time = QUARTER_TIME * 4.0 / duration.value;
+    if (duration.dotted) {
+      time += time / 2;
+    } else if (duration.doubleDotted) {
+      time += (time / 4) * 3;
+    }
+    return time * duration.division.times / duration.division.enters;
   };
 
   const getBeat = (measure, start) => {
