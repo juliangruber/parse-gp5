@@ -67,6 +67,13 @@ module.exports = buf => {
     buf = buf.slice(n);
   };
 
+  const readKeySignature = () => {
+    let keySignature = readByte();
+    if (keySignature < 0) keySignature = 7 - keySignature;
+    skip(3);
+    return keySignature;
+  }
+
   readVersion();
   if (!isSupportedVersion(version)) throw new Error('unsupported version');
 
@@ -109,9 +116,7 @@ module.exports = buf => {
 
   if (versionIndex > 0) skip(1);
 
-  let keySignature = readByte();
-  if (keySignature < 0) keySignature = 7 - keySignature;
-  skip(3);
+  let keySignature = readKeySignature();
 
   // octave
   readByte();
@@ -138,6 +143,42 @@ module.exports = buf => {
   const measures = readInt();
   const tracks = readInt();
 
+  const measureHeaders = [];
+  for (let i = 0; i < measures; i++) {
+    if (i > 0) skip(1);
+    let flags = readUnsignedByte();
+    let header = {};
+    let timeSignature = header.timeSignature = {};
+    header.number = i+1;
+    header.start = 0;
+    header.tempo = 120;
+    header.repeatOpen = (flags & 0x04) != 0;
+    if ((flags & 0x01) != 0) timeSignature.numerator = readByte();
+    if ((flags & 0x02) != 0) timeSignature.denominator = readByte();
+    if ((flags & 0x08) != 0) header.repeatClose = (readByte() & 0xff) - 1;
+    if ((flags & 0x20) != 0) {
+      let marker = header.marker = {};
+      marker.measure = header.number;
+      marker.title = readStringByteSizeOfInteger();
+      let color = marker.color = {};
+      color.r = readUnsignedByte();
+      color.g = readUnsignedByte();
+      color.b = readUnsignedByte();
+    }
+    if ((flags & 0x10) != 0) header.repeatAlternative = readUnsignedByte();
+    if ((flags & 0x40) != 0) {
+      keySignature = readKeySignature();
+      skip(1);
+    }
+    if ((flags & 0x01) != 0 || (flags & 0x02) != 0) skip(4);
+    if ((flags & 0x10) == 0) skip(1);
+    let tripletFeel = readByte();
+    if (tripletFeel === 1) header.tripletFeel = 'eigth';
+    else if (tripletFeel === 2) header.tripletFeel = 'sixteents';
+    else header.tripletFeel = 'none';
+    measureHeaders.push(header);
+  }
+
   return {
     version: { major, minor },
     title,
@@ -155,10 +196,11 @@ module.exports = buf => {
     keySignature,
     channels,
     measures,
-    tracks
+    tracks,
+    measureHeaders
   };
 };
 
 if (!module.parent) {
-  console.log(module.exports(require('fs').readFileSync(`${process.env.HOME}/Desktop/fekdich.gp5`)));
+  console.log(JSON.stringify(module.exports(require('fs').readFileSync(`${process.env.HOME}/Desktop/fekdich.gp5`)), null, '  '));
 }
