@@ -95,9 +95,10 @@ module.exports = buf => {
     comments.push(readStringByteSizeOfInteger());
   }
 
-  const lyricTrack = readInt();
-  const lyricFrom = readInt();
-  const lyricText = readStringInteger();
+  const lyrics = {};
+  lyrics.track = readInt();
+  lyrics.from = readInt();
+  lyrics.text = readStringInteger();
   for (let i = 0; i < 4; i++) {
     readInt();
     readStringInteger();
@@ -141,7 +142,7 @@ module.exports = buf => {
   skip(42);
 
   const measures = readInt();
-  const tracks = readInt();
+  const trackCount = readInt();
 
   const measureHeaders = [];
   for (let i = 0; i < measures; i++) {
@@ -179,6 +180,53 @@ module.exports = buf => {
     measureHeaders.push(header);
   }
 
+  const readChannel = (track) => {
+    const gmChannel1 = readInt() -1;
+    const gmChannel2 = readInt() -1;
+    if (gmChannel1 === 0 && gmChannel1 < channels.length) {
+      gmChannel1Param = {};
+      gmChannel1Param.key = 'gm channel 1';
+      gmChannel1.Value = String(gmChannel1);
+      gmChannel2Param = {};
+      gmChannel1Param.key = 'gm channel 2';
+      gmChannel1.Value = String(gmChannel1 != 9 ? gmChannel2 : gmChannel1);
+      const channel = channels[gmChannel1];
+
+      /* TODO
+      for (let i = 0; i < channels.length; i++) {
+        let channelAux = channels[i];
+        for (let n = 0; n < channelAux.)
+      } */
+    }
+  }
+
+  const tracks = [];
+  for (let number = 1; number <= trackCount; number++) {
+    let track = {};
+    readUnsignedByte();
+    if (number == 1 || versionIndex == 0) skip(1);
+    track.number = number;
+    track.lyrics = number == lyrics.track
+      ? lyrics
+      : {};
+    track.name = readStringByte(40);
+    track.strings = [];
+    let stringCount = readInt();
+    for (let i = 0; i < 7; i++) {
+      let tuning = readInt();
+      if (stringCount > i) {
+        let string = {};
+        string.number = i + 1;
+        string.value = tuning;
+        track.strings.push(string);
+      }
+    }
+    readInt();
+    // readChannel(song, track, channels)
+    tracks.push(track);
+  }
+  skip(versionIndex == 0 ? 2 : 1);
+
   return {
     version: { major, minor },
     title,
@@ -191,13 +239,14 @@ module.exports = buf => {
     tab,
     instructions,
     comments,
-    lyrics: { track: lyricTrack, from: lyricFrom, text: lyricText },
+    lyrics,
     tempoValue,
     keySignature,
     channels,
     measures,
-    tracks,
-    measureHeaders
+    trackCount,
+    measureHeaders,
+    tracks
   };
 };
 
