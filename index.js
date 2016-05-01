@@ -1,3 +1,4 @@
+'use strict';
 
 const versions = [
   'FICHIER GUITAR PRO v5.00',
@@ -12,6 +13,15 @@ module.exports = buf => {
     /*if (version === null)*/ version = readStringByte(30);
   };
 
+  const readColor = () => {
+    let color = {};
+    color.r = readUnsignedByte();
+    color.g = readUnsignedByte();
+    color.b = readUnsignedByte();
+    skip(1);
+    return color;
+  };
+
   const isSupportedVersion = (version) => {
     for (let i = 0; i < versions.length; i++) {
       if (versions[i] === version) {
@@ -23,21 +33,21 @@ module.exports = buf => {
   };
 
   const readUnsignedByte = () => {
-    const num = buf.readUInt8();
+    const num = buf[0] & 0xff;
     buf = buf.slice(1);
     return num;
   };
 
   const readByte = () => {
-    const num = buf.readInt8();
+    const byte = buf[0];
     buf = buf.slice(1);
-    return num;
+    return byte;
   };
 
   const readInt = () => {
-    const num = buf.readInt32LE();
-    buf = buf.slice(4); 
-    return num;
+    const bytes = buf.slice(0, 4);
+    buf = buf.slice(4);
+    return ((bytes[3] & 0xff) << 24) | ((bytes[2] & 0xff) << 16) | ((bytes[1] & 0xff) << 8) | (bytes[0] & 0xff);
   };
 
   const readString = (size, len) => {
@@ -70,15 +80,55 @@ module.exports = buf => {
   const readKeySignature = () => {
     let keySignature = readByte();
     if (keySignature < 0) keySignature = 7 - keySignature;
-    skip(3);
     return keySignature;
-  }
+  };
+
+  const readLyrics = () => {
+    let lyric = {};
+    lyric.from = readInt(); 
+    lyric.lyric = readStringInteger();
+    for (let i = 0; i < 4; i++) {
+      readInt();
+      readStringInteger();
+    }
+    return lyric;
+  };
+
+  const readPageSetup = () => {
+    skip(versionIndex > 0
+      ? 49
+      : 30);
+    for (let i = 0; i < 11; i++) {
+      skip(4);
+      readStringByte(0);
+    }
+  };
+
+  const readChannels = () => {
+    let channels = [];
+    for (let i = 0; i < 64; i++) {
+      let channel = {};
+      channel.program = readInt();
+      channel.volume = readByte();
+      channel.balance = readByte();
+      channel.chorus = readByte();
+      channel.reverb = readByte();
+      channel.phaser = readByte();
+      channel.tremolo = readByte();
+      channel.bank = i == 9
+        ? 'default percussion bank'
+        : 'default bank'
+      if (channel.program < 0) channel.program = 0;
+      channels.push(channel);
+      skip(2);
+    };
+    return channels;
+  };
 
   readVersion();
   if (!isSupportedVersion(version)) throw new Error('unsupported version');
 
   const [, major, minor] = /v(\d+)\.(\d+)/.exec(version);
-
   const title = readStringByteSizeOfInteger();
   const subtitle = readStringByteSizeOfInteger();
   const artist = readStringByteSizeOfInteger();
@@ -88,83 +138,53 @@ module.exports = buf => {
   const copyright = readStringByteSizeOfInteger();
   const tab = readStringByteSizeOfInteger();
   const instructions = readStringByteSizeOfInteger();
-
   const commentsLen = readInt();
   const comments = [];
   for (let i = 0; i < comments; i++) {
     comments.push(readStringByteSizeOfInteger());
   }
 
-  const lyrics = {};
-  lyrics.track = readInt();
-  lyrics.from = readInt();
-  lyrics.text = readStringInteger();
-  for (let i = 0; i < 4; i++) {
-    readInt();
-    readStringInteger();
-  }
+  const lyricTrack = readInt();
+  const lyric = readLyrics();
 
-  // page setup
-  skip(versionIndex > 0
-    ? 49
-    : 30);
-  for (let i = 0; i < 11; i++) {
-    skip(4);
-    readStringByte(0);
-  }
+  readPageSetup();
 
   const tempoValue = readInt();
 
   if (versionIndex > 0) skip(1);
 
   let keySignature = readKeySignature();
+  skip(3);
 
   // octave
   readByte();
 
-  const channels = [];
-  for (let i = 0; i < 64; i++) {
-    let channel = {};
-    channel.program = readInt();
-    channel.volume = readByte();
-    channel.balance = readByte();
-    channel.chorus = readByte();
-    channel.reverb = readByte();
-    channel.phaser = readByte();
-    channel.tremolo = readByte();
-    channel.bank = i == 9
-      ? 'default percussion bank'
-      : 'default bank'
-    if (channel.program < 0) channel.program = 0;
-    skip(2);
-    channels.push(channel);
-  };
+  const channels = readChannels();
+
   skip(42);
 
   const measures = readInt();
   const trackCount = readInt();
 
   const measureHeaders = [];
+  let timeSignature = {};
   for (let i = 0; i < measures; i++) {
     if (i > 0) skip(1);
     let flags = readUnsignedByte();
     let header = {};
-    let timeSignature = header.timeSignature = {};
     header.number = i+1;
     header.start = 0;
     header.tempo = 120;
     header.repeatOpen = (flags & 0x04) != 0;
     if ((flags & 0x01) != 0) timeSignature.numerator = readByte();
     if ((flags & 0x02) != 0) timeSignature.denominator = readByte();
+    header.timeSignature = JSON.parse(JSON.stringify(timeSignature));
     if ((flags & 0x08) != 0) header.repeatClose = (readByte() & 0xff) - 1;
     if ((flags & 0x20) != 0) {
       let marker = header.marker = {};
       marker.measure = header.number;
       marker.title = readStringByteSizeOfInteger();
-      let color = marker.color = {};
-      color.r = readUnsignedByte();
-      color.g = readUnsignedByte();
-      color.b = readUnsignedByte();
+      marker.color = readColor();
     }
     if ((flags & 0x10) != 0) header.repeatAlternative = readUnsignedByte();
     if ((flags & 0x40) != 0) {
@@ -184,12 +204,12 @@ module.exports = buf => {
     const gmChannel1 = readInt() -1;
     const gmChannel2 = readInt() -1;
     if (gmChannel1 === 0 && gmChannel1 < channels.length) {
-      gmChannel1Param = {};
+      const gmChannel1Param = {};
       gmChannel1Param.key = 'gm channel 1';
-      gmChannel1.Value = String(gmChannel1);
-      gmChannel2Param = {};
-      gmChannel1Param.key = 'gm channel 2';
-      gmChannel1.Value = String(gmChannel1 != 9 ? gmChannel2 : gmChannel1);
+      gmChannel1Param.Value = String(gmChannel1);
+      const gmChannel2Param = {};
+      gmChannel2Param.key = 'gm channel 2';
+      gmChannel2Param.Value = String(gmChannel1 != 9 ? gmChannel2 : gmChannel1);
       const channel = channels[gmChannel1];
 
       /* TODO
@@ -204,10 +224,10 @@ module.exports = buf => {
   for (let number = 1; number <= trackCount; number++) {
     let track = {};
     readUnsignedByte();
-    if (number == 1 || versionIndex == 0) skip(1);
+    if (number === 1 || versionIndex === 0) skip(1);
     track.number = number;
-    track.lyrics = number == lyrics.track
-      ? lyrics
+    track.lyrics = number == lyricTrack
+      ? lyric
       : {};
     track.name = readStringByte(40);
     track.strings = [];
@@ -222,7 +242,16 @@ module.exports = buf => {
       }
     }
     readInt();
-    // readChannel(song, track, channels)
+    // TODO
+    readChannel(track);
+    readInt();
+    track.offset = readInt();
+    track.color = readColor();
+    skip(versionIndex > 0 ? 49 : 44);
+    if (versionIndex > 0) {
+      readStringByteSizeOfInteger();
+      readStringByteSizeOfInteger();
+    }
     tracks.push(track);
   }
   skip(versionIndex == 0 ? 2 : 1);
@@ -239,7 +268,7 @@ module.exports = buf => {
     tab,
     instructions,
     comments,
-    lyrics,
+    lyric,
     tempoValue,
     keySignature,
     channels,
