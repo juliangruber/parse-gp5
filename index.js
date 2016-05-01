@@ -5,6 +5,9 @@ const versions = [
   'FICHIER GUITAR PRO v5.10'
 ];
 
+const QUARTER_TIME = 960;
+const QUARTER = 4;
+
 module.exports = buf => {
   let version;
   let versionIndex;
@@ -167,7 +170,10 @@ module.exports = buf => {
   const trackCount = readInt();
 
   const measureHeaders = [];
-  let timeSignature = {};
+  let timeSignature = { numerator: 4, denominator: {
+    value: QUARTER,
+    division: { enters: 1, times: 1 }
+  }};
   for (let i = 0; i < measures; i++) {
     if (i > 0) skip(1);
     let flags = readUnsignedByte();
@@ -177,7 +183,7 @@ module.exports = buf => {
     header.tempo = 120;
     header.repeatOpen = (flags & 0x04) != 0;
     if ((flags & 0x01) != 0) timeSignature.numerator = readByte();
-    if ((flags & 0x02) != 0) timeSignature.denominator = readByte();
+    if ((flags & 0x02) != 0) timeSignature.denominator.value = readByte();
     header.timeSignature = JSON.parse(JSON.stringify(timeSignature));
     if ((flags & 0x08) != 0) header.repeatClose = (readByte() & 0xff) - 1;
     if ((flags & 0x20) != 0) {
@@ -604,11 +610,14 @@ module.exports = buf => {
           break;
       }
     }
+    if (!('enters' in duration.division)) {
+      duration.division.enters = 1;
+      duration.division.times = 1;
+    }
     return getTime(duration);
   };
 
   const getTime = duration => {
-    const QUARTER_TIME = 960;
     let time = QUARTER_TIME * 4.0 / duration.value;
     if (duration.dotted) {
       time += time / 2;
@@ -667,8 +676,12 @@ module.exports = buf => {
     }
   };
 
+  const getLength = (header) => {
+    return header.timeSignature.numerator * getTime(header.timeSignature.denominator);
+  };
+
   let tempo = { value: tempoValue };
-  let start = 'quarter time';
+  let start = QUARTER_TIME;
   for (let i = 0; i < measures; i++) {
     let header = measureHeaders[i];
     header.start = start;
@@ -680,7 +693,7 @@ module.exports = buf => {
       skip(1);
     }
     header.tempo = JSON.parse(JSON.stringify(tempo));
-    start += header.length; // TODO
+    start += getLength(header);
   }
 
   return {
