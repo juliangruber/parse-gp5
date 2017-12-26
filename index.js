@@ -417,7 +417,7 @@ module.exports = buf => {
     const dynamic = readUnsignedByte();
     const transition = readByte();
     const duration = readUnsignedByte();
-    const flags = readUnsignedBute();
+    const flags = readUnsignedByte();
     const grace = {};
     grace.fret = fret;
     grace.dynamic = ('TGVelocities.MIN_VELOCITY' + ('TGVelocities.VELOCITY_INCREMENT' * dynamic)) - 'TGVelocities.VELOCITY_INCREMENT';
