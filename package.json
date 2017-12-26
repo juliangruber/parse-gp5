@@ -1,7 +1,7 @@
 {
   "name": "parse-gp5",
   "description": "Parser for the Guitar Pro 5 file format",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "repository": "juliangruber/parse-gp5"
 }
