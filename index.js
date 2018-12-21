@@ -720,5 +720,5 @@ module.exports = buf => {
 };
 
 if (!module.parent) {
-  console.log(JSON.stringify(module.exports(require('fs').readFileSync(`${process.env.HOME}/Desktop/fekdich.gp5`)), null, '  '));
+  console.log(JSON.stringify(module.exports(require('fs').readFileSync(process.argv[1])), null, '  '));
 }
