@@ -143,7 +143,7 @@ module.exports = buf => {
   const instructions = readStringByteSizeOfInteger();
   const commentsLen = readInt();
   const comments = [];
-  for (let i = 0; i < comments; i++) {
+  for (let i = 0; i < commentsLen; i++) {
     comments.push(readStringByteSizeOfInteger());
   }
 
