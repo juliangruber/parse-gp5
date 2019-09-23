@@ -285,7 +285,7 @@ module.exports = buf => {
     }
     const duration = readDuration(flags);
     const effect = {};
-    if ((flags & 0x02) != 0) readChord(track.strings.length, beat);
+    if ((flags & 0x02) != 0) readChord(track.strings, beat);
     if ((flags & 0x04) != 0) readText(beat);
     if ((flags & 0x08) != 0) readBeatEffects(beat, effect);
     if ((flags & 0x10) != 0) readMixChange(tempo);
